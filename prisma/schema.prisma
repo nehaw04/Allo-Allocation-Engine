@@ -1,11 +1,14 @@
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL") // 👈 This line is missing or empty!
 }
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
+
+// ... your existing model definitions (Product, Stock, Warehouse, etc.) remain exactly the same ...
 
 enum ReservationStatus {
   PENDING
