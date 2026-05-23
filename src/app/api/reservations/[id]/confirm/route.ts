@@ -11,14 +11,17 @@ export async function POST(
   });
 
   try {
+    // 1. Read the idempotency header from the incoming request
+    const idempotencyKey = request.headers.get('idempotency-key');
+
     await client.connect();
     
-    // Explicitly await the params Promise from context
+    // Explicitly await the params Promise from context (Next.js 16 compliant)
     const { id } = await context.params;
 
     await client.query('BEGIN');
 
-    // 1. Fetch the targeted reservation with an exclusive write lock
+    // 2. Fetch the targeted reservation with an exclusive write lock
     const reservationResult = await client.query(
       'SELECT * FROM "Reservation" WHERE id = $1 FOR UPDATE',
       [id]
@@ -31,18 +34,25 @@ export async function POST(
 
     const reservation = reservationResult.rows[0];
 
-    // 2. Enforce Lifecycle Rules
+    // 3. Idempotency Boundary Check: If already CONFIRMED, return success gracefully
     if (reservation.status === 'CONFIRMED') {
       await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: "TRANSACTION_ALREADY_PROCESSED" }, { status: 400 });
+      return NextResponse.json(
+        { success: true, message: "Transaction finalized successfully." },
+        {
+          status: 200,
+          headers: idempotencyKey ? { 'X-Cache-Idempotency': 'HIT' } : {}
+        }
+      );
     }
 
+    // 4. Enforce Lifecycle Rules for Expiration
     if (reservation.status === 'RELEASED' || new Date(reservation.expiresAt) < new Date()) {
       await client.query('ROLLBACK');
       return NextResponse.json({ success: false, error: "RESERVATION_EXPIRED" }, { status: 410 });
     }
 
-    // 3. Complete the purchase state changes
+    // 5. Complete the purchase state changes
     await client.query(
       'UPDATE "Reservation" SET status = \'CONFIRMED\' WHERE id = $1',
       [id]
