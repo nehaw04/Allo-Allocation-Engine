@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'pg';
 
 export async function POST(
-  req: NextRequest, 
-  { params }: { params: Promise<{ id: string }> } 
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
@@ -13,8 +13,8 @@ export async function POST(
   try {
     await client.connect();
     
-    // Await the params Promise to cleanly extract the ID
-    const { id } = await params; 
+    // Explicitly await the params Promise from context
+    const { id } = await context.params; 
 
     await client.query(
       'UPDATE "Reservation" SET status = \'RELEASED\' WHERE id = $1 AND status = \'PENDING\'',
