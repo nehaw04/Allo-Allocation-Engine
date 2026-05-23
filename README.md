@@ -1,36 +1,24 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Allo Distributed Inventory & Allocation Engine (V2.1)
 
-## Getting Started
+A high-concurrency, production-grade inventory reservation and order-fulfillment engine built with **Next.js (App Router)**, **TypeScript**, and a hosted **Neon PostgreSQL** database layer. 
 
-First, run the development server:
+This platform prevents overselling during high-traffic checkout flows (e.g., flash sales, deep wallet redirects, UPI completions) by introducing a pessimistic locking reservation system with a 10-minute automated holding state.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+---
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🚀 Core Architectural System Design
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 1. Concurrency Control & Race-Condition Prevention
+To completely eliminate double-allocation issues without introducing heavy distributed locking overhead, this engine utilizes database-level **Pessimistic Row Locking**. 
+When a reservation request hits `POST /api/reservations`:
+* A raw PostgreSQL transaction block is initiated (`BEGIN`).
+* The targeted stock row is immediately locked via `SELECT ... FOR UPDATE`. This forces concurrent parallel requests for the exact same SKU to stall at the database boundary until the active transaction either commits or rolls back.
+* Available units are calculated safely in real-time by deducting unexpired holds from physical inventory totals. If units are available, the 10-minute hold window is inserted, and the state commits (`COMMIT`). Otherwise, it safely executes a `ROLLBACK` and handles a `409 Conflict`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 2. High-Efficiency Expiry Mechanism: Lazy Cleanup on Read
+Rather than running an expensive background cron worker or continuous polling thread that drains compute resources every minute, this system leverages a highly efficient **Lazy Cleanup on Read** strategy. 
+* Every time a client initiates a catalog lookup (`GET /api/products`) or an allocation request (`POST /api/reservations`), the system runs a fast, indexed query to instantly mutate expired pending records:
+  ```sql
+  UPDATE "Reservation" 
+  SET status = 'RELEASED' 
+  WHERE status = 'PENDING' AND "expiresAt" < NOW();

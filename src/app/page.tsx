@@ -84,7 +84,7 @@ export default function FulfillmentDashboard() {
     setActionLoading(true);
     
     try {
-      const res = await fetch('/api/products', {
+      const res = await fetch('/api/reservations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -134,8 +134,8 @@ export default function FulfillmentDashboard() {
     setActionLoading(true);
 
     try {
-      const res = await fetch('/api/products', {
-        method: 'PATCH',
+      const res = await fetch(`/api/reservations/${reservation.id}/confirm`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reservationId: reservation.id })
       });
@@ -164,11 +164,18 @@ export default function FulfillmentDashboard() {
   }
 
   // 5. API Action: Cancel Reservation Hold Window Manually
-  function manualCancelReservation() {
-    setReservation(null);
-    setSystemError({ type: 'SUCCESS', message: 'User aborted reservation hold window. Units released immediately.' });
-    fetchCatalog();
+  async function manualCancelReservation() {
+  if (!reservation) return;
+  try {
+    await fetch(`/api/reservations/${reservation.id}/release`, { method: 'POST' });
+  } catch (err) {
+    console.error(err);
   }
+  setReservation(null);
+  setSystemError({ type: 'SUCCESS', message: 'User aborted reservation hold window. Units released immediately.' });
+  fetchCatalog();
+  }
+   
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
