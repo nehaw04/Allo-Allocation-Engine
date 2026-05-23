@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'pg';
 
-// 1. Update the signature: params is now a Promise
 export async function POST(
   req: NextRequest, 
   { params }: { params: Promise<{ id: string }> } 
@@ -14,7 +13,7 @@ export async function POST(
   try {
     await client.connect();
     
-    // 2. Await the params Promise to cleanly extract the ID
+    // Await the params Promise to cleanly extract the ID
     const { id } = await params; 
 
     await client.query(
