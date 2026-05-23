@@ -28,4 +28,31 @@ export async function GET() {
   } finally {
     await client.end();
   }
+  // Inside your GET function in src/app/api/products/route.ts:
+  const query = `
+    SELECT 
+      p.id as product_id,
+      p.sku,
+      p.name,
+      p.description,
+      p.price,
+      w.id as warehouse_id,
+      w.name as warehouse_name,
+      w.location,
+      s."totalUnits" as physical_units,
+      -- Calculate true available stock dynamically (Physical Units - Active Holds)
+      (s."totalUnits" - COALESCE(
+        (SELECT SUM(r.quantity) 
+        FROM "Reservation" r 
+        WHERE r."productId" = p.id 
+          AND r."warehouseId" = w.id 
+          AND r.status = 'PENDING' 
+          AND r."expiresAt" > NOW()
+        ), 0)
+      ) as "totalUnits" 
+    FROM "Stock" s
+    JOIN "Product" p ON s."productId" = p.id
+    JOIN "Warehouse" w ON s."warehouseId" = w.id
+    ORDER BY p.name ASC, w.name ASC;
+  `;
 }

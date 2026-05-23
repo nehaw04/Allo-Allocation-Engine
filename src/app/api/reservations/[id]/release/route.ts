@@ -6,7 +6,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const client = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   try {
     await client.connect();
-    await client.query('UPDATE "Reservation" SET status = \'RELEASED\' WHERE id = $1 AND status = \'PENDING\'');
+    // Find this line around the middle of your file and update it:
+    await client.query(
+    'UPDATE "Reservation" SET status = \'RELEASED\' WHERE id = $1 AND status = \'PENDING\'',
+    [id] // 👈 Added this missing second argument array!
+    );
     return NextResponse.json({ success: true, message: "Hold dropped early. Stock units freed." }, { status: 200 });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

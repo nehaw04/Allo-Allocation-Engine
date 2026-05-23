@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client } from 'pg';
+import { ReservationSchema } from '@/lib/validation'; // 👈 1. Import your Zod schema
 
 export async function POST(req: NextRequest) {
   const client = new Client({ 
@@ -10,8 +11,21 @@ export async function POST(req: NextRequest) {
   try {
     await client.connect();
     const body = await req.json();
-    const { productId, warehouseId, quantity } = body;
 
+    // 👈 2. Validate the request body using Zod before processing anything else
+    const validation = ReservationSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { success: false, error: "VALIDATION_ERROR", issues: validation.error.format() },
+        { status: 400 }
+      );
+    }
+
+    // 3. Extract the clean, validated data
+    const { productId, warehouseId, quantity } = validation.data;
+
+    
+    // ... rest of your existing reservation code remains exactly the same ...
     await client.query('BEGIN');
 
     // 1. Lazy Cleanup: Flush expired entries before evaluating limits
